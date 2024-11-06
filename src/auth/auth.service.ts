@@ -2,7 +2,6 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class AuthService {
@@ -11,17 +10,22 @@ export class AuthService {
   async register(username: string, password: string, name: string, email: string) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Membuat user baru di database
     const user = await this.prisma.user.create({
-      data: {
-        id: uuidv4(),
-        username,
-        password: hashedPassword,
-        name,
-        email,
-      },
+      data: { username, password: hashedPassword, name, email },
     });
 
-    return user;
+    // Membuat token JWT
+    const token = this.jwtService.sign({ username: user.username, sub: user.id });
+
+    // Memperbarui user dengan token yang baru dibuat
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { token },
+    });
+
+    // Mengembalikan user beserta token
+    return { ...user, token };
   }
 
   async login(username: string, password: string) {
@@ -30,16 +34,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Membuat token JWT
     const token = this.jwtService.sign({ username: user.username, sub: user.id });
 
-    // Memperbarui token ke database
     await this.prisma.user.update({
       where: { id: user.id },
       data: { token },
     });
 
-    return { token }; // Mengembalikan token
+    return { token };
   }
 
   async logout(userId: string) {
@@ -47,7 +49,6 @@ export class AuthService {
       where: { id: userId },
       data: { token: null },
     });
-
     return { message: 'Logged out successfully' };
   }
 }
