@@ -11,10 +11,9 @@ export class AuthService {
   async register(username: string, password: string, name: string, email: string) {
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Menambahkan id secara manual jika tidak otomatis di-generate
     const user = await this.prisma.user.create({
       data: {
-        id: uuidv4(),  // Generate UUID jika id tidak auto-generated
+        id: uuidv4(),
         username,
         password: hashedPassword,
         name,
@@ -27,26 +26,23 @@ export class AuthService {
 
   async login(username: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { username } });
-
-    // Cek apakah username atau password tidak valid
     if (!user || !(await bcrypt.compare(password, user.password))) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    // Generate token JWT
+    // Membuat token JWT
     const token = this.jwtService.sign({ username: user.username, sub: user.id });
 
-    // Simpan token di database
+    // Memperbarui token ke database
     await this.prisma.user.update({
       where: { id: user.id },
       data: { token },
     });
 
-    return { token };
+    return { token }; // Mengembalikan token
   }
 
   async logout(userId: string) {
-    // Menghapus token dari database
     await this.prisma.user.update({
       where: { id: userId },
       data: { token: null },
